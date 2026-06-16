@@ -1,8 +1,8 @@
 const KRW = n => (Math.round(n)||0).toLocaleString('ko-KR') + '원';
 const today = new Date();
 const ym = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
-const KEY = 'dh_overtime_pro_v118';
-const AUTH_KEY = 'dh_overtime_auth_v118';
+const KEY = 'dh_overtime_pro_v119';
+const AUTH_KEY = 'dh_overtime_auth_v119';
 const SUPABASE_URL = 'https://ybqsvjgsqyeenuybmjbe.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_snDyQo7ZgxlcxcJKm29JNQ_k7NjzRG1';
 const SUPABASE_REST = SUPABASE_URL.replace(/\/$/, '') + '/rest/v1';
@@ -24,7 +24,7 @@ let state = JSON.parse(localStorage.getItem(KEY) || 'null') || defaultData;
 let selectedType = state.settings.workTypes[0];
 let authState = { session:null, user:null, profile:null, profiles:[] };
 
-function normalizeLoginId(v){ v=String(v||'').trim(); return v.includes('@') ? v : `${v}@dh.local`; }
+function normalizeLoginId(v){ v=String(v||'').trim(); return v.includes('@') ? v : `${v}@dh.co.kr`; }
 function roleName(role){ return role==='admin'?'관리자':role==='viewer'?'조회전용':'일반사용자'; }
 function getStoredSession(){ try{return JSON.parse(localStorage.getItem(AUTH_KEY)||'null')}catch(e){return null} }
 function storeSession(session){ authState.session=session||null; localStorage.setItem(AUTH_KEY, JSON.stringify(session||null)); }
@@ -33,7 +33,38 @@ async function authRequest(path, options={}){ const res=await fetch(`${SUPABASE_
 async function login(email,password){ const data=await authRequest('token?grant_type=password',{method:'POST',body:JSON.stringify({email:normalizeLoginId(email),password})}); storeSession(data); authState.user=data.user; await ensureProfile(); hideAuth(); await loadCloudData(); renderAll(); applyRoleAccess(); }
 async function getCurrentUser(){ const sess=getStoredSession(); if(!sess||!sess.access_token) return null; authState.session=sess; try{ const data=await authRequest('user',{method:'GET',headers:{Authorization:`Bearer ${sess.access_token}`}}); authState.user=data; await ensureProfile(); hideAuth(); return data; }catch(e){ localStorage.removeItem(AUTH_KEY); authState={session:null,user:null,profile:null,profiles:[]}; showAuth(); return null; } }
 async function signOut(){ localStorage.removeItem(AUTH_KEY); authState={session:null,user:null,profile:null,profiles:[]}; const cur=$('topUserLabel'); if(cur) cur.textContent='👤 로그인 필요'; const pbtn=$('profileBtn'); if(pbtn) pbtn.style.display='none'; showAuth(); }
-async function signUpByAdmin(loginId,password,name,role){ const data=await authRequest('signup',{method:'POST',body:JSON.stringify({email:normalizeLoginId(loginId),password})}); const uid=data.user&&data.user.id; if(uid){ await cloudRequest('user_profiles',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify({id:uid,display_name:name||loginId,role})}); } return data; }
+async function signUpByAdmin(loginId,password,name,role){
+  const email = normalizeLoginId(loginId);
+  const displayName = (name || loginId || email.split('@')[0]).trim();
+  const data = await authRequest('signup',{
+    method:'POST',
+    body:JSON.stringify({
+      email,
+      password,
+      data:{ display_name: displayName, role }
+    })
+  });
+  const uid = data?.user?.id || data?.id || data?.session?.user?.id;
+  if(!uid){
+    // Supabase 설정에 따라 Auth 계정은 생성되지만 응답에 UID가 비어있을 수 있음.
+    // 이 경우 supabase_auth_extra.sql의 Auth 트리거가 user_profiles를 자동 생성한다.
+    await loadProfiles();
+    return data;
+  }
+  await cloudRequest('user_profiles',{
+    method:'POST',
+    headers:{Prefer:'return=minimal'},
+    body:JSON.stringify({id:uid,display_name:displayName,role})
+  }).catch(async()=>{
+    await cloudRequest(`user_profiles?id=eq.${encodeURIComponent(uid)}`,{
+      method:'PATCH',
+      headers:{Prefer:'return:minimal'},
+      body:JSON.stringify({display_name:displayName,role})
+    });
+  });
+  await loadProfiles();
+  return data;
+}
 async function ensureProfile(){ if(!authState.user) return; try{ let rows=await cloudSelect(`user_profiles?select=*&id=eq.${encodeURIComponent(authState.user.id)}&limit=1`); if(!rows||!rows.length){ const all=await cloudSelect('user_profiles?select=id&limit=1').catch(()=>[]); const role=(!all||!all.length)?'admin':'user'; await cloudRequest('user_profiles',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({id:authState.user.id,display_name:(authState.user.email||'').split('@')[0],role})}); rows=await cloudSelect(`user_profiles?select=*&id=eq.${encodeURIComponent(authState.user.id)}&limit=1`); } authState.profile=rows&&rows[0]; await loadProfiles(); }catch(e){ console.warn('profile load failed',e); authState.profile={id:authState.user.id,display_name:(authState.user.email||'사용자'),role:'user'}; } }
 async function loadProfiles(){ authState.profiles=await cloudSelect('user_profiles?select=*&order=created_at.asc').catch(()=>[]); }
 async function updateProfileRole(id,role){ await cloudRequest(`user_profiles?id=eq.${encodeURIComponent(id)}`,{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({role})}); await loadProfiles(); renderUsers(); }
@@ -61,7 +92,7 @@ function isAdmin(){ return currentRole()==='admin'; }
 function applyRoleAccess(){
   const role=currentRole();
   const admin=isAdmin();
-  const name=authState.profile?.display_name || (authState.user?.email||'').replace('@dh.local','') || '사용자';
+  const name=authState.profile?.display_name || (authState.user?.email||'').replace('@dh.co.kr','') || '사용자';
   const cur=$('topUserLabel');
   if(cur) cur.textContent=`👤 ${name} · ${roleName(role)}`;
   const pbtn=$('profileBtn');

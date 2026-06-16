@@ -172,7 +172,45 @@
   .employeeSummaryTable th,.employeeSummaryTable td{padding:8px 6px;}
 }
 
-/* v1.20 user list / statement notes */
+/* v1.21 user list / statement notes */
 .userListItem small{color:#64748b;font-weight:700}
 #statementTable .noteRow th,#statementTable .noteRow td{background:#fff7e6;text-align:left;white-space:normal;line-height:1.5;font-weight:700}
 #statementTable .noteRow td{font-weight:600;color:#334155}
+
+/* v1.21 user delete */
+.userActions{display:flex;align-items:center;gap:8px}
+.userDeleteBtn[disabled]{opacity:.4;cursor:not-allowed}
+@media(max-width:760px){.userActions{width:100%;justify-content:flex-end}.userListItem{align-items:flex-start;flex-wrap:wrap}}
+
+
+/* v1.22 mobile topbar logo overlap fix */
+@media(max-width:760px){
+  .topbar{
+    display:flex!important;
+    justify-content:flex-start!important;
+    gap:8px!important;
+    padding:0 10px!important;
+    overflow:hidden!important;
+  }
+  .mobileTitle{
+    position:static!important;
+    left:auto!important;
+    transform:none!important;
+    flex:1 1 auto!important;
+    min-width:0!important;
+    justify-content:flex-start!important;
+    gap:6px!important;
+    font-size:15px!important;
+    overflow:hidden!important;
+  }
+  .mobileTitle img{width:30px!important;height:30px!important;flex:0 0 auto!important;}
+  .mobileTitle b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:120px;}
+  .topRight{margin-left:auto!important;flex:0 0 auto!important;gap:6px!important;display:flex!important;align-items:center!important;}
+  #profileBtn,#logoutBtn{padding:10px 12px!important;font-size:13px!important;border-radius:12px!important;white-space:nowrap!important;min-height:42px!important;}
+  #profileBtn{max-width:82px;overflow:hidden;text-overflow:ellipsis;}
+}
+@media(max-width:390px){
+  .mobileTitle b{max-width:92px;font-size:14px;}
+  #profileBtn,#logoutBtn{padding:9px 10px!important;font-size:12px!important;}
+  .hamb{width:38px!important;min-width:38px!important;}
+}

@@ -1,8 +1,8 @@
 const KRW = n => (Math.round(n)||0).toLocaleString('ko-KR') + '원';
 const today = new Date();
 const ym = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
-const KEY = 'dh_overtime_pro_v120';
-const AUTH_KEY = 'dh_overtime_auth_v120';
+const KEY = 'dh_overtime_pro_v121';
+const AUTH_KEY = 'dh_overtime_auth_v121';
 const SUPABASE_URL = 'https://ybqsvjgsqyeenuybmjbe.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_snDyQo7ZgxlcxcJKm29JNQ_k7NjzRG1';
 const SUPABASE_REST = SUPABASE_URL.replace(/\/$/, '') + '/rest/v1';
@@ -68,6 +68,14 @@ async function signUpByAdmin(loginId,password,name,role){
 async function ensureProfile(){ if(!authState.user) return; try{ let rows=await cloudSelect(`user_profiles?select=*&id=eq.${encodeURIComponent(authState.user.id)}&limit=1`); if(!rows||!rows.length){ const all=await cloudSelect('user_profiles?select=id&limit=1').catch(()=>[]); const role=(!all||!all.length)?'admin':'user'; await cloudRequest('user_profiles',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({id:authState.user.id,display_name:(authState.user.email||'').split('@')[0],role})}); rows=await cloudSelect(`user_profiles?select=*&id=eq.${encodeURIComponent(authState.user.id)}&limit=1`); } authState.profile=rows&&rows[0]; await loadProfiles(); }catch(e){ console.warn('profile load failed',e); authState.profile={id:authState.user.id,display_name:(authState.user.email||'사용자'),role:'user'}; } }
 async function loadProfiles(){ authState.profiles=await cloudSelect('user_profiles?select=*&order=created_at.asc').catch(()=>[]); }
 async function updateProfileRole(id,role){ await cloudRequest(`user_profiles?id=eq.${encodeURIComponent(id)}`,{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({role})}); await loadProfiles(); renderUsers(); }
+async function deleteAppUser(id){
+  if(!isAdmin()) throw new Error('관리자만 가능합니다.');
+  if(!id) throw new Error('삭제할 계정이 없습니다.');
+  if(authState.user && id===authState.user.id) throw new Error('현재 로그인 중인 본인 계정은 삭제할 수 없습니다.');
+  await cloudRequest('rpc/delete_app_user',{method:'POST',body:JSON.stringify({target_user_id:id})});
+  await loadProfiles();
+  renderUsers();
+}
 async function updateMyProfile(displayName,password){
   if(!authState.user || !authState.session) throw new Error('로그인이 필요합니다.');
   const patch={display_name:displayName||''};
@@ -338,8 +346,18 @@ function renderUsers(){
   const box=$('userList'); if(!box) return;
   if(currentRole()!=='admin'){ box.innerHTML='<p class="muted">관리자만 확인 가능합니다.</p>'; return; }
   if(!authState.profiles || !authState.profiles.length){ box.innerHTML='<p class="muted">등록된 사용자가 없습니다.</p>'; return; }
-  box.innerHTML=authState.profiles.map(u=>`<div class="listItem userListItem"><div><strong>${u.display_name||'사용자'}</strong><br><small>${roleName(u.role)}</small></div><select class="roleSelect" data-id="${u.id}"><option value="admin" ${u.role==='admin'?'selected':''}>관리자</option><option value="user" ${u.role==='user'?'selected':''}>일반사용자</option><option value="viewer" ${u.role==='viewer'?'selected':''}>조회전용</option></select></div>`).join('');
+  box.innerHTML=authState.profiles.map(u=>`<div class="listItem userListItem"><div><strong>${u.display_name||'사용자'}</strong><br><small>${roleName(u.role)}</small></div><div class="userActions"><select class="roleSelect" data-id="${u.id}"><option value="admin" ${u.role==='admin'?'selected':''}>관리자</option><option value="user" ${u.role==='user'?'selected':''}>일반사용자</option><option value="viewer" ${u.role==='viewer'?'selected':''}>조회전용</option></select><button type="button" class="ghost small danger userDeleteBtn" data-id="${u.id}" ${authState.user&&u.id===authState.user.id?'disabled title="본인 계정은 삭제할 수 없습니다."':''}>삭제</button></div></div>`).join('');
   document.querySelectorAll('.roleSelect').forEach(sel=>sel.onchange=async()=>{ if(confirm('권한을 변경할까요?')) await updateProfileRole(sel.dataset.id, sel.value); });
+  document.querySelectorAll('.userDeleteBtn').forEach(btn=>btn.onclick=async()=>{
+    const id=btn.dataset.id;
+    const row=(authState.profiles||[]).find(x=>x.id===id);
+    if(!row) return;
+    if(!confirm(`${row.display_name||'사용자'} 계정을 삭제할까요?
+삭제하면 해당 계정은 더 이상 로그인할 수 없습니다.`)) return;
+    try{ await deleteAppUser(id); alert('계정을 삭제했습니다.'); }
+    catch(err){ alert('계정 삭제 실패: '+err.message+'
+압축파일의 supabase_auth_extra.sql을 SQL Editor에서 다시 실행했는지 확인해주세요.'); }
+  });
 }
 const loginForm=$('loginForm');
 if(loginForm) loginForm.onsubmit=async e=>{e.preventDefault(); const msg=$('authMsg'); msg.textContent='로그인 중...'; try{ await login($('loginEmail').value,$('loginPassword').value); msg.textContent=''; }catch(err){ msg.textContent='로그인 실패: '+err.message; }};

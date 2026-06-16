@@ -1,8 +1,8 @@
 const KRW = n => (Math.round(n)||0).toLocaleString('ko-KR') + '원';
 const today = new Date();
 const ym = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
-const KEY = 'dh_overtime_pro_v113';
-const AUTH_KEY = 'dh_overtime_auth_v113';
+const KEY = 'dh_overtime_pro_v115';
+const AUTH_KEY = 'dh_overtime_auth_v115';
 const SUPABASE_URL = 'https://ybqsvjgsqyeenuybmjbe.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_snDyQo7ZgxlcxcJKm29JNQ_k7NjzRG1';
 const SUPABASE_REST = SUPABASE_URL.replace(/\/$/, '') + '/rest/v1';
@@ -40,7 +40,24 @@ async function updateProfileRole(id,role){ await cloudRequest(`user_profiles?id=
 function showAuth(){ const o=$('authOverlay'); if(o) o.classList.add('show'); }
 function hideAuth(){ const o=$('authOverlay'); if(o) o.classList.remove('show'); }
 function currentRole(){ return authState.profile?.role || 'viewer'; }
-function applyRoleAccess(){ const role=currentRole(); const name=authState.profile?.display_name || authState.user?.email || '사용자'; const cur=$('currentUser'); if(cur) cur.textContent=`👤 ${name} (${roleName(role)})`; document.querySelectorAll('[data-admin-only]').forEach(el=>el.style.display=role==='admin'?'flex':'none'); if(role==='viewer' && $('register')?.classList.contains('show')) showPage('dashboard'); if(role!=='admin' && ['employees','settings','users'].some(id=>$(id)?.classList.contains('show'))) showPage('dashboard'); }
+function isAdmin(){ return currentRole()==='admin'; }
+function applyRoleAccess(){
+  const role=currentRole();
+  const admin=isAdmin();
+  const name=authState.profile?.display_name || authState.user?.email || '사용자';
+  const cur=$('currentUser');
+  if(cur) cur.textContent=`👤 ${name} (${roleName(role)})`;
+
+  // 일반사용자/조회전용은 조회만 가능: 등록/관리/설정/사용자관리 숨김
+  document.querySelectorAll('[data-admin-only], .nav[data-page="register"], .nav[data-page="employees"], .nav[data-page="settings"], .nav[data-page="users"], [data-go="register"], [data-go="settings"]').forEach(el=>{
+    el.style.display = admin ? '' : 'none';
+  });
+
+  // 관리자 외 계정이 제한 화면에 있으면 대시보드로 이동
+  if(!admin && ['register','employees','settings','users'].some(id=>$(id)?.classList.contains('show'))){
+    showPage('dashboard');
+  }
+}
 
 const save = () => localStorage.setItem(KEY, JSON.stringify(state));
 const cloudHeaders = (extra={}) => ({
@@ -209,7 +226,7 @@ function updateCalc(){ setFullDayTimes(); const r=currentFormRecord(); const box
 ['date','startTime','endTime'].forEach(id=>$(id).addEventListener('change',()=>{ if(id!=='date') normalizeTimeInput(id); updateFullDayVisibility(); autoTypeByDateTime(); updateCalc(); }));
 ['startTime','endTime'].forEach(id=>$(id).addEventListener('blur',()=>{ normalizeTimeInput(id); autoTypeByDateTime(); updateCalc(); }));
 if($('fullDayWork')) $('fullDayWork').addEventListener('change',()=>{ setFullDayTimes(); autoTypeByDateTime(); updateCalc(); });
-$('overtimeForm').onsubmit=async e=>{e.preventDefault(); setFullDayTimes(); normalizeTimeInput('startTime'); normalizeTimeInput('endTime'); const r=currentFormRecord(); if(!parseTimeInput(r.startTime)||!parseTimeInput(r.endTime)){alert('시간 형식을 확인해주세요. 예: 18:00 또는 1800');return} if(!r.participants.length){alert('참석자를 선택해주세요.');return} try{ const edit=$('editId').value; if(edit){ const row=await updateRecordCloud(edit,r); const i=state.records.findIndex(x=>String(x.id)===String(edit)); state.records[i]=recFromDb(row); } else { const row=await insertRecordCloud(r); state.records.push(recFromDb(row)); } save(); showAuth(); getCurrentUser().then(async user=>{ if(user){ await loadCloudData(); clearForm(); renderAll(); applyRoleAccess(); } else { clearForm(); renderAll(); } }); alert('저장되었습니다.'); }catch(err){ console.error(err); alert('DB 저장 실패: Supabase 테이블/RLS 설정을 확인해주세요.'); } };
+$('overtimeForm').onsubmit=async e=>{e.preventDefault(); if(!isAdmin()){alert('특근 등록은 관리자만 가능합니다. 일반사용자는 조회만 가능합니다.'); return;} setFullDayTimes(); normalizeTimeInput('startTime'); normalizeTimeInput('endTime'); const r=currentFormRecord(); if(!parseTimeInput(r.startTime)||!parseTimeInput(r.endTime)){alert('시간 형식을 확인해주세요. 예: 18:00 또는 1800');return} if(!r.participants.length){alert('참석자를 선택해주세요.');return} try{ const edit=$('editId').value; if(edit){ const row=await updateRecordCloud(edit,r); const i=state.records.findIndex(x=>String(x.id)===String(edit)); state.records[i]=recFromDb(row); } else { const row=await insertRecordCloud(r); state.records.push(recFromDb(row)); } save(); showAuth(); getCurrentUser().then(async user=>{ if(user){ await loadCloudData(); clearForm(); renderAll(); applyRoleAccess(); } else { clearForm(); renderAll(); } }); alert('저장되었습니다.'); }catch(err){ console.error(err); alert('DB 저장 실패: Supabase 테이블/RLS 설정을 확인해주세요.'); } };
 function clearForm(){ $('overtimeForm').reset(); $('date').value=new Date().toISOString().slice(0,10); $('startTime').value='18:00'; $('endTime').value='22:00'; if($('fullDayWork')) $('fullDayWork').checked=false; $('editId').value=''; document.querySelectorAll('.part').forEach(c=>c.checked=false); updateFullDayVisibility(); autoTypeByDateTime(); updateCalc(); }
 $('clearForm').onclick=clearForm; $('selectAllEmployees').onclick=()=>{const all=[...document.querySelectorAll('.part')]; const any=all.some(c=>!c.checked); all.forEach(c=>c.checked=any); updateCalc();};
 function renderDashboard(){ const rec=monthRecords(); const total=monthlyGrandTotal(); const people=new Set(rec.flatMap(r=>r.participants)); $('dashTotal').textContent=KRW(total); $('dashCount').textContent=rec.length+'건'; $('dashPeople').textContent=people.size+'명'; if($('dashHoliday')) $('dashHoliday').textContent=rec.filter(r=>r.type==='휴일근무').length+'건'; $('recentList').innerHTML=rec.slice(-6).reverse().map(r=>`<div class="recentRow"><span>${r.date.slice(5)} (${['일','월','화','수','목','금','토'][new Date(r.date+'T00:00').getDay()]})</span><span class="badge ${r.type}">${r.type}</span><span>${r.site}</span><span>${r.workName||''}</span><strong class="money">${KRW(recordTotal(r))}</strong></div>`).join('')||'<p class="muted">등록된 내역이 없습니다.</p>'; }
@@ -217,19 +234,21 @@ function renderStatement(){
   const rec=monthRecords();
   const emps=state.employees.filter(e=>e.active);
   $('statementTitle').textContent=$('globalMonth').value.replace('-','년 ')+'월 특근명세서';
-  let html='<thead><tr><th class="dateCol">날짜</th><th class="typeCol">구분</th><th class="siteCol">현장명</th><th class="workCol">작업내용</th><th class="timeCol">시간</th><th class="amountCol">금액</th>'+emps.map(e=>`<th class="empCol">${e.name}</th>`).join('')+'<th class="manageCol">관리</th></tr></thead><tbody>';
+  const manageHead = isAdmin() ? '<th class="manageCol">관리</th>' : '';
+  let html='<thead><tr><th class="dateCol">날짜</th><th class="typeCol">구분</th><th class="siteCol">현장명</th><th class="workCol">작업내용</th><th class="timeCol">시간</th><th class="amountCol">금액</th>'+emps.map(e=>`<th class="empCol">${e.name}</th>`).join('')+manageHead+'</tr></thead><tbody>';
   rec.forEach(r=>{
     const dayClass=isHoliday(r.date)?'holidayDate':'';
     html+=`<tr><td class="dateCol ${dayClass}">${r.date.slice(5)}</td><td class="typeCol">${r.type}</td><td class="siteCol">${r.site}</td><td class="workCol nameCell">${r.workName||''}</td><td class="timeCol">${r.startTime}~${r.endTime}</td><td class="amountCol">${KRW(recordTotal(r))}</td>`+
       emps.map(e=>`<td class="empCol">${r.participants.includes(e.id)?'○':''}</td>`).join('')+
-      `<td class="manageCol"><button class="ghost small" onclick="editRecord(${r.id})">수정</button> <button class="ghost small danger" onclick="deleteRecord(${r.id})">삭제</button></td></tr>`;
+      (isAdmin()?`<td class="manageCol"><button class="ghost small" onclick="editRecord('${r.id}')">수정</button> <button class="ghost small danger" onclick="deleteRecord('${r.id}')">삭제</button></td>`:'')+`</tr>`;
   });
-  html+='</tbody><tfoot><tr><th colspan="6">직원별 합계</th>'+emps.map(e=>`<th class="empCol">${KRW(employeeMonthSettlement(e).total)}</th>`).join('')+'<th></th></tr>'+
-    (state.settings.minuteCarry?'<tr><th colspan="6">분단위 이월정산</th>'+emps.map(e=>`<th class="empCol"><small>${employeeMonthSettlement(e).carryText}</small></th>`).join('')+'<th></th></tr>':'')+'</tfoot>';
+  const manageFoot = isAdmin() ? '<th></th>' : '';
+  html+='</tbody><tfoot><tr><th colspan="6">직원별 합계</th>'+emps.map(e=>`<th class="empCol">${KRW(employeeMonthSettlement(e).total)}</th>`).join('')+manageFoot+'</tr>'+
+    (state.settings.minuteCarry?'<tr><th colspan="6">분단위 이월정산</th>'+emps.map(e=>`<th class="empCol"><small>${employeeMonthSettlement(e).carryText}</small></th>`).join('')+manageFoot+'</tr>':'')+'</tfoot>';
   $('statementTable').innerHTML=html;
 }
-window.editRecord=id=>{ const r=state.records.find(x=>String(x.id)===String(id)); showPage('register'); $('editId').value=r.id; $('date').value=r.date; $('site').value=r.site; $('workName').value=r.workName; $('startTime').value=r.startTime; $('endTime').value=r.endTime; $('note').value=r.note; if($('fullDayWork')) $('fullDayWork').checked=!!r.fullDay; updateFullDayVisibility(); selectedType=r.type; renderTypes(); document.querySelectorAll('.part').forEach(c=>c.checked=r.participants.map(String).includes(String(c.value))); updateCalc(); };
-window.deleteRecord=async id=>{ if(currentRole()!=='admin'){alert('삭제는 관리자만 가능합니다.');return} if(confirm('삭제할까요?')){try{await deleteRecordCloud(id)}catch(e){console.warn(e)} state.records=state.records.filter(r=>String(r.id)!==String(id)); save(); renderAll();} };
+window.editRecord=id=>{ if(!isAdmin()){alert('수정은 관리자만 가능합니다.');return} const r=state.records.find(x=>String(x.id)===String(id)); showPage('register'); $('editId').value=r.id; $('date').value=r.date; $('site').value=r.site; $('workName').value=r.workName; $('startTime').value=r.startTime; $('endTime').value=r.endTime; $('note').value=r.note; if($('fullDayWork')) $('fullDayWork').checked=!!r.fullDay; updateFullDayVisibility(); selectedType=r.type; renderTypes(); document.querySelectorAll('.part').forEach(c=>c.checked=r.participants.map(String).includes(String(c.value))); updateCalc(); };
+window.deleteRecord=async id=>{ if(!isAdmin()){alert('삭제는 관리자만 가능합니다.');return} if(confirm('삭제할까요?')){try{await deleteRecordCloud(id)}catch(e){console.warn(e)} state.records=state.records.filter(r=>String(r.id)!==String(id)); save(); renderAll();} };
 function buildCalendarHtml(){ const m=$('globalMonth').value; const [y,mo]=m.split('-').map(Number); const first=new Date(y,mo-1,1); const last=new Date(y,mo,0).getDate(); const names=['일','월','화','수','목','금','토']; let html=names.map((n,i)=>`<div class="dayName ${i===0?'sun':i===6?'sat':''}">${n}</div>`).join(''); for(let i=0;i<first.getDay();i++) html+='<div class="day empty"></div>'; for(let d=1;d<=last;d++){ const ds=`${m}-${String(d).padStart(2,'0')}`; const wd=new Date(ds+'T00:00').getDay(); const holiday=state.settings.holidays.includes(ds); const classes=['day']; if(wd===0) classes.push('sun'); if(wd===6) classes.push('sat'); if(holiday) classes.push('holiday'); const rec=state.records.filter(r=>r.date===ds); html+=`<div class="${classes.join(' ')}"><div class="num">${d}</div>${holiday?'<small class="holidayLabel">공휴일</small>':''}${rec.map(r=>`<span class="eventPill ${r.type}">${r.type} ${rec.length>1?'':KRW(recordTotal(r))}</span>`).join('')}</div>`; } return html; }
 function renderCalendar(){ const m=$('globalMonth').value; const [y,mo]=m.split('-').map(Number); if($('calendarTitle')) $('calendarTitle').textContent=`${y}년 ${mo}월 특근캘린더`; if($('miniCalendarTitle')) $('miniCalendarTitle').textContent=`${y}년 ${mo}월`; const html=buildCalendarHtml(); if($('calendarGrid')) $('calendarGrid').innerHTML=html; if($('calendarGridFull')) $('calendarGridFull').innerHTML=html; }
 function renderEmployeeList(){ $('employeeList').innerHTML=state.employees.map(e=>`<div class="listItem"><div><strong>${e.name}</strong> <span class="badge">${e.payType==='half'?'평일절반':'일반'}</span><br><small>${e.position||''}</small></div><div class="itemBtns"><button class="ghost small" onclick="editEmployee('${e.id}')">수정</button><button class="ghost small danger" onclick="removeEmployee('${e.id}')">삭제</button></div></div>`).join(''); }
@@ -256,7 +275,7 @@ if(userCreateForm) userCreateForm.onsubmit=async e=>{ e.preventDefault(); if(cur
 function renderSiteSummary(){ const map={}; monthRecords().forEach(r=>{map[r.site]=map[r.site]||{count:0,total:0,types:{}};map[r.site].count++;map[r.site].total+=recordTotal(r);map[r.site].types[r.type]=(map[r.site].types[r.type]||0)+1}); $('siteSummaryList').innerHTML=Object.entries(map).map(([site,v])=>`<div class="listItem"><div><strong>${site}</strong><br><small>${Object.entries(v.types).map(([k,c])=>`${k} ${c}건`).join(' · ')}</small></div><strong>${KRW(v.total)}</strong></div>`).join('')||'집계 내역이 없습니다.'; }
 function renderSettings(){ $('normalRate').value=state.settings.normalRate; $('halfRate').value=state.settings.halfRate; $('holidayFixed').value=state.settings.holidayFixed; $('minuteCarry').checked=state.settings.minuteCarry!==false; $('holidays').value=state.settings.holidays.join('\n'); if($('holidayAuto')) $('holidayAuto').checked=state.settings.holidayAuto!==false; $('workTypes').value=state.settings.workTypes.join(','); }
 $('settingsForm').onsubmit=async e=>{e.preventDefault(); if(currentRole()!=='admin'){alert('설정은 관리자만 가능합니다.');return} state.settings.normalRate=Number($('normalRate').value); state.settings.halfRate=Number($('halfRate').value); state.settings.holidayFixed=Number($('holidayFixed').value); state.settings.minuteCarry=$('minuteCarry').checked; state.settings.holidays=$('holidays').value.split(/\s+/).filter(Boolean); state.settings.workTypes=$('workTypes').value.split(',').map(x=>x.trim()).filter(Boolean).filter(x=>['야간특근','휴일근무'].includes(x)); if(!state.settings.workTypes.length) state.settings.workTypes=['야간특근','휴일근무']; autoTypeByDateTime(); try{await saveSettingsCloud();}catch(err){console.warn(err); alert('설정은 로컬 저장되었습니다. Supabase 설정 저장은 실패했습니다.');} save(); renderAll(); alert('설정 저장되었습니다.');};
-function showPage(id){ const role=currentRole(); if(role!=='admin' && ['employees','settings','users'].includes(id)){alert('관리자만 접근 가능합니다.'); id='dashboard';} if(role==='viewer' && id==='register'){alert('조회전용 계정은 등록할 수 없습니다.'); id='dashboard';} document.querySelectorAll('.page').forEach(p=>p.classList.remove('show')); $(id).classList.add('show'); document.querySelectorAll('.nav').forEach(n=>n.classList.toggle('active',n.dataset.page===id)); window.scrollTo({top:0,behavior:'smooth'}); }
+function showPage(id){ if(!isAdmin() && ['register','employees','settings','users'].includes(id)){alert('관리자만 접근 가능합니다. 일반사용자는 조회만 가능합니다.'); id='dashboard';} document.querySelectorAll('.page').forEach(p=>p.classList.remove('show')); $(id).classList.add('show'); document.querySelectorAll('.nav').forEach(n=>n.classList.toggle('active',n.dataset.page===id)); window.scrollTo({top:0,behavior:'smooth'}); }
 document.querySelectorAll('.nav').forEach(b=>b.onclick=()=>showPage(b.dataset.page)); document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>showPage(b.dataset.go)); $('globalMonth').onchange=renderAll; $('printStatement').onclick=()=>window.print();
 function setMonthOffset(offset){
   const input=$('globalMonth');

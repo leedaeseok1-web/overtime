@@ -1,8 +1,8 @@
 const KRW = n => (Math.round(n)||0).toLocaleString('ko-KR') + '원';
 const today = new Date();
 const ym = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
-const KEY = 'dh_overtime_pro_v119';
-const AUTH_KEY = 'dh_overtime_auth_v119';
+const KEY = 'dh_overtime_pro_v120';
+const AUTH_KEY = 'dh_overtime_auth_v120';
 const SUPABASE_URL = 'https://ybqsvjgsqyeenuybmjbe.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_snDyQo7ZgxlcxcJKm29JNQ_k7NjzRG1';
 const SUPABASE_REST = SUPABASE_URL.replace(/\/$/, '') + '/rest/v1';
@@ -24,7 +24,7 @@ let state = JSON.parse(localStorage.getItem(KEY) || 'null') || defaultData;
 let selectedType = state.settings.workTypes[0];
 let authState = { session:null, user:null, profile:null, profiles:[] };
 
-function normalizeLoginId(v){ v=String(v||'').trim(); return v.includes('@') ? v : `${v}@dh.co.kr`; }
+function normalizeLoginId(v){ v=String(v||'').trim(); return v.includes('@') ? v : `${v}@dh.local`; }
 function roleName(role){ return role==='admin'?'관리자':role==='viewer'?'조회전용':'일반사용자'; }
 function getStoredSession(){ try{return JSON.parse(localStorage.getItem(AUTH_KEY)||'null')}catch(e){return null} }
 function storeSession(session){ authState.session=session||null; localStorage.setItem(AUTH_KEY, JSON.stringify(session||null)); }
@@ -92,7 +92,7 @@ function isAdmin(){ return currentRole()==='admin'; }
 function applyRoleAccess(){
   const role=currentRole();
   const admin=isAdmin();
-  const name=authState.profile?.display_name || (authState.user?.email||'').replace('@dh.co.kr','') || '사용자';
+  const name=authState.profile?.display_name || (authState.user?.email||'').replace('@dh.local','') || '사용자';
   const cur=$('topUserLabel');
   if(cur) cur.textContent=`👤 ${name} · ${roleName(role)}`;
   const pbtn=$('profileBtn');
@@ -297,9 +297,12 @@ function renderStatement(){
       emps.map(e=>`<td class="empCol">${r.participants.includes(e.id)?'<span class="markCircle">○</span>':''}</td>`).join('')+
       (isAdmin()?`<td class="manageCol"><button class="ghost small" onclick="editRecord('${r.id}')">수정</button> <button class="ghost small danger" onclick="deleteRecord('${r.id}')">삭제</button></td>`:'')+`</tr>`;
   });
+  const noteItems = rec.filter(r=>String(r.note||'').trim()).map(r=>`${r.date.slice(5)} ${r.note.trim()}`);
+  const noteColspan = 6 + emps.length + (isAdmin()?1:0);
+  const notesRow = noteItems.length ? `<tr class="noteRow"><th>특이사항</th><td colspan="${noteColspan-1}">${noteItems.join('<br>')}</td></tr>` : '';
   const manageFoot = isAdmin() ? '<th></th>' : '';
   html+='</tbody><tfoot><tr><th colspan="6">직원별 합계</th>'+emps.map(e=>`<th class="empCol">${KRW(employeeMonthSettlement(e).total)}</th>`).join('')+manageFoot+'</tr>'+
-    (state.settings.minuteCarry?'<tr><th colspan="6">분단위 이월정산</th>'+emps.map(e=>`<th class="empCol carryCell"><small>${employeeMonthSettlement(e).carryText}</small></th>`).join('')+manageFoot+'</tr>':'')+'</tfoot>';
+    (state.settings.minuteCarry?'<tr><th colspan="6">분단위 이월정산</th>'+emps.map(e=>`<th class="empCol carryCell"><small>${employeeMonthSettlement(e).carryText}</small></th>`).join('')+manageFoot+'</tr>':'')+notesRow+'</tfoot>';
   $('statementTable').innerHTML=html;
 }
 window.editRecord=id=>{ if(!isAdmin()){alert('수정은 관리자만 가능합니다.');return} const r=state.records.find(x=>String(x.id)===String(id)); showPage('register'); $('editId').value=r.id; $('date').value=r.date; $('site').value=r.site; $('workName').value=r.workName; $('startTime').value=r.startTime; $('endTime').value=r.endTime; $('note').value=r.note; if($('fullDayWork')) $('fullDayWork').checked=!!r.fullDay; updateFullDayVisibility(); selectedType=r.type; renderTypes(); document.querySelectorAll('.part').forEach(c=>c.checked=r.participants.map(String).includes(String(c.value))); updateCalc(); };
@@ -335,7 +338,7 @@ function renderUsers(){
   const box=$('userList'); if(!box) return;
   if(currentRole()!=='admin'){ box.innerHTML='<p class="muted">관리자만 확인 가능합니다.</p>'; return; }
   if(!authState.profiles || !authState.profiles.length){ box.innerHTML='<p class="muted">등록된 사용자가 없습니다.</p>'; return; }
-  box.innerHTML=authState.profiles.map(u=>`<div class="listItem"><div><strong>${u.display_name||u.id}</strong><br><small>${u.id}</small></div><select class="roleSelect" data-id="${u.id}"><option value="admin" ${u.role==='admin'?'selected':''}>관리자</option><option value="user" ${u.role==='user'?'selected':''}>일반사용자</option><option value="viewer" ${u.role==='viewer'?'selected':''}>조회전용</option></select></div>`).join('');
+  box.innerHTML=authState.profiles.map(u=>`<div class="listItem userListItem"><div><strong>${u.display_name||'사용자'}</strong><br><small>${roleName(u.role)}</small></div><select class="roleSelect" data-id="${u.id}"><option value="admin" ${u.role==='admin'?'selected':''}>관리자</option><option value="user" ${u.role==='user'?'selected':''}>일반사용자</option><option value="viewer" ${u.role==='viewer'?'selected':''}>조회전용</option></select></div>`).join('');
   document.querySelectorAll('.roleSelect').forEach(sel=>sel.onchange=async()=>{ if(confirm('권한을 변경할까요?')) await updateProfileRole(sel.dataset.id, sel.value); });
 }
 const loginForm=$('loginForm');
@@ -392,9 +395,13 @@ function exportExcelStatement(){
   if(state.settings.minuteCarry){
     table += `<tr class="carry"><th colspan="6">분단위 이월정산</th>${emps.map(e=>`<th>${employeeMonthSettlement(e).carryText}</th>`).join('')}</tr>`;
   }
+  const noteItems = rec.filter(r=>String(r.note||'').trim()).map(r=>`${r.date.slice(5)} ${r.note.trim()}`);
+  if(noteItems.length){
+    table += `<tr class="noteRow"><th>특이사항</th><td colspan="${5+emps.length}">${noteItems.join('<br>')}</td></tr>`;
+  }
   table += '</tbody></table>';
   const html = `<!doctype html><html><head><meta charset="utf-8"><style>
-    body{font-family:'Malgun Gothic',Arial,sans-serif} table{border-collapse:collapse;font-size:10pt} th,td{border:1px solid #111;text-align:center;vertical-align:middle;padding:4px;white-space:nowrap} th{background:#eef2f8;font-weight:bold}.title{font-size:16pt;text-align:left;border:0;background:#fff;padding:10px}.sum th,.carry th{background:#eef2f8}.carry th{font-size:8pt}.holidayDate{background:#fde9e7;color:#d60000;font-weight:bold}
+    body{font-family:'Malgun Gothic',Arial,sans-serif} table{border-collapse:collapse;font-size:10pt} th,td{border:1px solid #111;text-align:center;vertical-align:middle;padding:4px;white-space:nowrap} th{background:#eef2f8;font-weight:bold}.title{font-size:16pt;text-align:left;border:0;background:#fff;padding:10px}.sum th,.carry th{background:#eef2f8}.carry th{font-size:8pt}.holidayDate{background:#fde9e7;color:#d60000;font-weight:bold}.noteRow th,.noteRow td{background:#fff7e6;text-align:left;white-space:normal;font-size:10pt}
   </style></head><body>${table}</body></html>`;
   const blob=new Blob(['\ufeff'+html],{type:'application/vnd.ms-excel;charset=utf-8'});
   const a=document.createElement('a');

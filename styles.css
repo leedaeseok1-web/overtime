@@ -171,3 +171,8 @@
   .employeeSummaryTable{width:max-content;min-width:100%;font-size:12px;}
   .employeeSummaryTable th,.employeeSummaryTable td{padding:8px 6px;}
 }
+
+/* v1.20 user list / statement notes */
+.userListItem small{color:#64748b;font-weight:700}
+#statementTable .noteRow th,#statementTable .noteRow td{background:#fff7e6;text-align:left;white-space:normal;line-height:1.5;font-weight:700}
+#statementTable .noteRow td{font-weight:600;color:#334155}

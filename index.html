@@ -3,8 +3,90 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>DH 특근관리 Pro v1.20.5</title>
+  <title>DH 특근관리 Pro v1.20.7</title>
   <link rel="stylesheet" href="styles.css" />
+
+<style id="mobile-header-hard-fix">
+@media (max-width: 768px){
+  .topbar, .topBar, .header, .app-header, .main-header{
+    min-height: 66px !important;
+    height: auto !important;
+    padding: 8px 12px !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    overflow: hidden !important;
+  }
+
+  .topbar img, .topBar img, .header img, .app-header img, .main-header img{
+    max-width: 38px !important;
+    width: 38px !important;
+    height: 38px !important;
+    object-fit: contain !important;
+    flex: 0 0 auto !important;
+  }
+
+  .topbar h1, .topbar .title, .topbar .app-title, .topbar .brand-title,
+  .topBar h1, .topBar .title, .topBar .app-title, .topBar .brand-title,
+  .header h1, .header .title, .header .app-title, .header .brand-title,
+  .app-header h1, .app-header .title, .app-header .app-title, .app-header .brand-title,
+  .main-header h1, .main-header .title, .main-header .app-title, .main-header .brand-title{
+    font-size: 16px !important;
+    line-height: 1.15 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    max-width: 150px !important;
+    min-width: 0 !important;
+    flex: 1 1 auto !important;
+  }
+
+  /* 모바일 상단 설정 버튼은 완전히 숨기고, 로그아웃만 남김 */
+  button[data-page="settings"],
+  .topbar button.settings,
+  .topbar .settings,
+  .topbar .btn-settings,
+  .topbar [onclick*="settings"],
+  .topBar button.settings,
+  .header button.settings,
+  .app-header button.settings,
+  .main-header button.settings{
+    display: none !important;
+  }
+
+  .topbar .actions, .topbar .header-actions, .topbar .top-actions,
+  .topBar .actions, .topBar .header-actions, .topBar .top-actions,
+  .header .actions, .header .header-actions, .header .top-actions,
+  .app-header .actions, .app-header .header-actions, .app-header .top-actions,
+  .main-header .actions, .main-header .header-actions, .main-header .top-actions{
+    margin-left: auto !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    flex: 0 0 auto !important;
+    min-width: 0 !important;
+  }
+
+  /* 정보수정/설정 성격 버튼은 숨김 */
+  .topbar .profileBtn, .topbar .profile-btn, .topbar .edit-profile,
+  .topBar .profileBtn, .topBar .profile-btn, .topBar .edit-profile,
+  .header .profileBtn, .header .profile-btn, .header .edit-profile,
+  .app-header .profileBtn, .app-header .profile-btn, .app-header .edit-profile,
+  .main-header .profileBtn, .main-header .profile-btn, .main-header .edit-profile{
+    display:none !important;
+  }
+
+  /* 로그아웃 버튼만 작게 */
+  #logoutBtn, .logoutBtn, .logout-btn, button[onclick*="logout"]{
+    font-size: 14px !important;
+    padding: 8px 12px !important;
+    min-width: auto !important;
+    white-space: nowrap !important;
+    flex: 0 0 auto !important;
+  }
+}
+</style>
+
 </head>
 <body>
   <div id="authOverlay" class="authOverlay">
@@ -183,7 +265,7 @@
         <div class="pageTitle"><h2>설정</h2><p>단가와 공휴일을 관리합니다.</p></div>
         <form id="settingsForm" class="panel formPanel"><h3>단가설정</h3><div class="row3"><div><label>평일 기본단가/시간</label><input type="number" id="normalRate" /></div><div><label>평일 절반단가/시간</label><input type="number" id="halfRate" /></div><div><label>휴일 08~17 고정</label><input type="number" id="holidayFixed" /></div></div><label class="checkLine"><input type="checkbox" id="minuteCarry" /> 분단위 이월정산 적용 <small>예: 30분 + 40분 = 1시간 지급, 10분 잔여</small></label><label class="checkLine"><input type="checkbox" id="holidayAuto" checked /> 주말 자동 빨간날 처리 <small>법정공휴일은 아래 목록 기준으로 자동 반영됩니다.</small></label><label>공휴일 직접등록</label><textarea id="holidays" rows="5" placeholder="YYYY-MM-DD 형식, 줄바꿈으로 등록"></textarea><label>특근유형</label><input id="workTypes" placeholder="야간특근,휴일근무" /><button class="primary">설정 저장</button></form>
       </section>
-      <footer>© 2026 DAE HAN CONSTRUCTION Co., Ltd. All rights reserved. <span>DH 특근관리 Pro v1.20.5</span></footer>
+      <footer>© 2026 DAE HAN CONSTRUCTION Co., Ltd. All rights reserved. <span>DH 특근관리 Pro v1.20.7</span></footer>
     </main>
   </div>
   <script src="app.js"></script>

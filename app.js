@@ -199,3 +199,13 @@ $('exportCsv').onclick=exportExcelStatement;
 
 $('resetDemo').onclick=()=>{if(confirm('저장된 데이터를 초기 샘플로 되돌릴까요?')){localStorage.removeItem(KEY);location.reload();}};
 clearForm(); renderAll();
+
+// v1.11 mobile drawer behavior
+(function(){
+  const hamb=document.querySelector('.hamb');
+  const backdrop=document.querySelector('.mobileBackdrop');
+  function closeDrawer(){ document.body.classList.remove('drawerOpen'); }
+  if(hamb) hamb.addEventListener('click',()=>document.body.classList.toggle('drawerOpen'));
+  if(backdrop) backdrop.addEventListener('click',closeDrawer);
+  document.querySelectorAll('.sidebar .nav, .mobileBottomNav .nav').forEach(btn=>btn.addEventListener('click',closeDrawer));
+})();

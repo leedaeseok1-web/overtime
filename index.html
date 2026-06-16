@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DH 특근관리 Pro</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brandLogo brandTextLogo">
+        <div class="brandTop">
+          <img src="dh_mark.png" alt="DH" />
+          <div class="brandName">
+            <strong>(주)대한건설</strong>
+            <span>Inc. DAE HAN CONSTRUCTION</span>
+          </div>
+        </div>
+        <div class="brandLine"></div>
+        <div class="brandBiz">토목공사업, 건축공사업, 내진보강</div>
+      </div>
+      <nav>
+        <button class="nav active" data-page="dashboard"><span class="ico">▦</span>대시보드</button>
+        <button class="nav" data-page="register"><span class="ico">✎</span>특근등록</button>
+        <button class="nav" data-page="calendar"><span class="ico">▣</span>특근캘린더</button>
+        <button class="nav" data-page="statement"><span class="ico">▤</span>월별명세서</button>
+        <button class="nav" data-page="employeeSummary"><span class="ico">●</span>직원별정산</button>
+        <button class="nav" data-page="siteSummary"><span class="ico">▥</span>현장별집계</button>
+        <button class="nav" data-page="employees"><span class="ico">◉</span>직원관리</button>
+        <button class="nav" data-page="settings"><span class="ico">⚙</span>설정</button>
+      </nav>
+      <div class="rateBox">
+        <h4>단가 정보</h4>
+        <p><span>평일 일반</span><b>20,000원/시간</b></p>
+        <p><span>평일 절반단가</span><b>10,000원/시간</b></p>
+        <p><span>휴일 08~17시</span><b>150,000원 고정</b></p>
+        <button class="rateBtn" data-go="settings">설정 바로가기 ›</button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <button class="hamb">☰</button>
+        <div class="topRight">
+          <label class="monthLabel">📅 <input type="month" id="globalMonth" /></label>
+          <button class="bell" title="알림">🔔</button>
+          <span class="admin">👤 관리자</span>
+          <button class="ghost" id="resetDemo">초기화</button>
+        </div>
+      </header>
+
+      <section id="dashboard" class="page show">
+        <div class="cards">
+          <div class="card"><div class="cardIcon blue">▰</div><div><span>이번달 총 특근비</span><strong id="dashTotal">0원</strong><small>월별 전체 합계</small></div></div>
+          <div class="card"><div class="cardIcon green">▣</div><div><span>특근 건수</span><strong id="dashCount">0건</strong><small>등록된 특근 내역</small></div></div>
+          <div class="card"><div class="cardIcon purple">●</div><div><span>참여 직원</span><strong id="dashPeople">0명</strong><small>이번달 참여 인원</small></div></div>
+          <div class="card"><div class="cardIcon orange">☀</div><div><span>휴일근무 건수</span><strong id="dashHoliday">0건</strong><small>토·일·공휴일 근무</small></div></div>
+        </div>
+        <div class="dashboardGrid">
+          <div class="panel calendarPanel">
+            <div class="panelHead monthHead"><div class="monthSwitch"><button class="ghost small monthPrev" type="button">‹</button><h3 id="miniCalendarTitle">특근캘린더</h3><button class="ghost small monthNext" type="button">›</button></div><button class="ghost small" data-go="calendar">전체보기</button></div>
+            <div id="calendarGrid" class="calendar"></div>
+          </div>
+          <div class="panel recentPanel">
+            <div class="panelHead"><h3>최근 등록 내역</h3><button class="ghost small" data-go="statement">더보기 ›</button></div>
+            <div id="recentList" class="recentTable"></div>
+          </div>
+        </div>
+        <div class="quickCards">
+          <button data-go="register"><span class="q blue">✎</span><b>특근등록</b><small>새로운 특근 내역을 등록합니다.</small></button>
+          <button data-go="calendar"><span class="q green">▣</span><b>특근캘린더</b><small>달력으로 특근 내역을 확인합니다.</small></button>
+          <button data-go="statement"><span class="q purple">▤</span><b>월별명세서</b><small>월별 특근 명세서를 조회합니다.</small></button>
+          <button data-go="employeeSummary"><span class="q orange">●</span><b>직원별정산</b><small>직원별 특근 내역을 확인합니다.</small></button>
+          <button data-go="siteSummary"><span class="q teal">▥</span><b>현장별집계</b><small>현장별 특근 집계를 확인합니다.</small></button>
+        </div>
+      </section>
+
+      <section id="register" class="page">
+        <div class="pageTitle"><h2>특근등록</h2><p>시간과 참석자를 선택하면 유형과 금액이 자동계산됩니다.</p></div>
+        <div class="grid2">
+          <form id="overtimeForm" class="panel formPanel">
+            <h3>기본정보</h3>
+            <div class="chips hidden" id="typeChips"></div>
+            <label class="checkLine fullDayLine"><input type="checkbox" id="fullDayWork" /> 종일근무 <small>휴일근무 08:00~17:00, 150,000원 고정</small></label>
+            <div class="row2">
+              <div><label>날짜</label><input type="date" id="date" required /></div>
+              <div><label>현장명</label><input type="text" id="site" required /></div>
+            </div>
+            <label>작업내용</label><input type="text" id="workName" />
+            <div class="row2">
+              <div><label>시작시간</label><input type="text" id="startTime" value="18:00" list="timeList" inputmode="numeric" required /></div>
+              <div><label>종료시간</label><input type="text" id="endTime" value="22:00" list="timeList" inputmode="numeric" required /></div>
+            </div>
+            <label>비고</label><input type="text" id="note" placeholder="선택 입력" />
+            <input type="hidden" id="editId" />
+            <datalist id="timeList"><option value="08:00"><option value="17:00"><option value="18:00"><option value="19:00"><option value="20:00"><option value="21:00"><option value="22:00"><option value="23:00"><option value="00:00"><option value="01:00"></datalist>
+            <div class="actions"><button type="submit" class="primary">저장</button><button type="button" id="clearForm" class="ghost">비우기</button></div>
+          </form>
+          <div class="panel">
+            <div class="panelHead"><h3>참석자</h3><button class="ghost small" id="selectAllEmployees">전체선택</button></div>
+            <div id="participantBox" class="participants"></div>
+            <div class="calcBox"><h4>계산결과</h4><div id="calcPreview"></div></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="calendar" class="page">
+        <div class="pageTitle"><h2>특근캘린더</h2><p>월별 특근 일정을 달력으로 확인합니다.</p></div>
+        <div class="panel"><div class="panelHead monthHead"><div class="monthSwitch"><button class="ghost small monthPrev" type="button">‹</button><h3 id="calendarTitle">특근캘린더</h3><button class="ghost small monthNext" type="button">›</button></div><button class="ghost small goToday" type="button">오늘</button></div><div id="calendarGridFull" class="calendar"></div></div>
+      </section>
+
+      <section id="statement" class="page">
+        <div class="pageTitle"><h2>월별명세서</h2><p>기존 엑셀 양식처럼 확인하고 출력합니다.</p></div>
+        <div class="panel wide"><div class="panelHead monthHead"><div class="monthSwitch"><button class="ghost small monthPrev" type="button">‹</button><h3 id="statementTitle">월별 특근명세서</h3><button class="ghost small monthNext" type="button">›</button></div><div><button class="ghost small" id="exportCsv">CSV 내보내기</button><button class="primary small" id="printStatement">인쇄/PDF</button></div></div><div class="tableWrap"><table id="statementTable"></table></div></div>
+      </section>
+
+      <section id="employeeSummary" class="page">
+        <div class="pageTitle"><h2>직원별정산</h2><p>직원별 월 특근비를 확인합니다.</p></div>
+        <div class="panel"><div class="panelHead nowrapHead"><h3>직원선택</h3><select id="employeeFilter"></select></div><div id="employeeDetail" class="summaryBox"></div></div>
+      </section>
+
+      <section id="siteSummary" class="page">
+        <div class="pageTitle"><h2>현장별집계</h2><p>현장별 특근비를 집계합니다.</p></div>
+        <div class="panel"><h3>현장별집계</h3><div id="siteSummaryList" class="list"></div></div>
+      </section>
+
+      <section id="employees" class="page">
+        <div class="pageTitle"><h2>직원관리</h2><p>직원과 단가유형을 관리합니다.</p></div>
+        <div class="grid2"><form id="employeeForm" class="panel formPanel"><h3>직원등록</h3><label>이름</label><input id="empName" required /><label>직급/비고</label><input id="empPosition" placeholder="선택" /><label>단가유형</label><select id="empPayType"><option value="normal">일반</option><option value="half">평일 절반단가</option></select><input type="hidden" id="empEditId" /><div class="actions"><button class="primary">저장</button><button type="button" id="empClear" class="ghost">비우기</button></div></form><div class="panel"><h3>직원목록</h3><div id="employeeList" class="list"></div></div></div>
+      </section>
+
+      <section id="settings" class="page">
+        <div class="pageTitle"><h2>설정</h2><p>단가와 공휴일을 관리합니다.</p></div>
+        <form id="settingsForm" class="panel formPanel"><h3>단가설정</h3><div class="row3"><div><label>평일 기본단가/시간</label><input type="number" id="normalRate" /></div><div><label>평일 절반단가/시간</label><input type="number" id="halfRate" /></div><div><label>휴일 08~17 고정</label><input type="number" id="holidayFixed" /></div></div><label class="checkLine"><input type="checkbox" id="minuteCarry" /> 분단위 이월정산 적용 <small>예: 30분 + 40분 = 1시간 지급, 10분 잔여</small></label><label class="checkLine"><input type="checkbox" id="holidayAuto" checked /> 주말 자동 빨간날 처리 <small>법정공휴일은 아래 목록 기준으로 자동 반영됩니다.</small></label><label>공휴일 직접등록</label><textarea id="holidays" rows="5" placeholder="YYYY-MM-DD 형식, 줄바꿈으로 등록"></textarea><label>특근유형</label><input id="workTypes" placeholder="야간특근,휴일근무" /><button class="primary">설정 저장</button></form>
+      </section>
+      <footer>© 2026 DAE HAN CONSTRUCTION Co., Ltd. All rights reserved. <span>DH 특근관리 Pro v1.10</span></footer>
+    </main>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>

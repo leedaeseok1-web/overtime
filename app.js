@@ -1,7 +1,8 @@
 const KRW = n => (Math.round(n)||0).toLocaleString('ko-KR') + '원';
 const today = new Date();
 const ym = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
-const KEY = 'dh_overtime_pro_v112';
+const KEY = 'dh_overtime_pro_v113';
+const AUTH_KEY = 'dh_overtime_auth_v113';
 const SUPABASE_URL = 'https://ybqsvjgsqyeenuybmjbe.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_snDyQo7ZgxlcxcJKm29JNQ_k7NjzRG1';
 const SUPABASE_REST = SUPABASE_URL.replace(/\/$/, '') + '/rest/v1';
@@ -21,11 +22,30 @@ const defaultData = {
 };
 let state = JSON.parse(localStorage.getItem(KEY) || 'null') || defaultData;
 let selectedType = state.settings.workTypes[0];
+let authState = { session:null, user:null, profile:null, profiles:[] };
+
+function normalizeLoginId(v){ v=String(v||'').trim(); return v.includes('@') ? v : `${v}@dh.local`; }
+function roleName(role){ return role==='admin'?'관리자':role==='viewer'?'조회전용':'일반사용자'; }
+function getStoredSession(){ try{return JSON.parse(localStorage.getItem(AUTH_KEY)||'null')}catch(e){return null} }
+function storeSession(session){ authState.session=session||null; localStorage.setItem(AUTH_KEY, JSON.stringify(session||null)); }
+function authHeaders(extra={}){ return {apikey:SUPABASE_KEY,'Content-Type':'application/json',...extra}; }
+async function authRequest(path, options={}){ const res=await fetch(`${SUPABASE_URL}/auth/v1/${path}`, {...options, headers:authHeaders(options.headers||{})}); const txt=await res.text(); let data=null; try{data=txt?JSON.parse(txt):null}catch(e){data=txt} if(!res.ok) throw new Error((data&&data.msg)||(data&&data.error_description)||(data&&data.message)||txt||res.statusText); return data; }
+async function login(email,password){ const data=await authRequest('token?grant_type=password',{method:'POST',body:JSON.stringify({email:normalizeLoginId(email),password})}); storeSession(data); authState.user=data.user; await ensureProfile(); hideAuth(); await loadCloudData(); renderAll(); applyRoleAccess(); }
+async function getCurrentUser(){ const sess=getStoredSession(); if(!sess||!sess.access_token) return null; authState.session=sess; try{ const data=await authRequest('user',{method:'GET',headers:{Authorization:`Bearer ${sess.access_token}`}}); authState.user=data; await ensureProfile(); hideAuth(); return data; }catch(e){ localStorage.removeItem(AUTH_KEY); authState={session:null,user:null,profile:null,profiles:[]}; showAuth(); return null; } }
+async function signOut(){ localStorage.removeItem(AUTH_KEY); authState={session:null,user:null,profile:null,profiles:[]}; showAuth(); }
+async function signUpByAdmin(loginId,password,name,role){ const data=await authRequest('signup',{method:'POST',body:JSON.stringify({email:normalizeLoginId(loginId),password})}); const uid=data.user&&data.user.id; if(uid){ await cloudRequest('user_profiles',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify({id:uid,display_name:name||loginId,role})}); } return data; }
+async function ensureProfile(){ if(!authState.user) return; try{ let rows=await cloudSelect(`user_profiles?select=*&id=eq.${encodeURIComponent(authState.user.id)}&limit=1`); if(!rows||!rows.length){ const all=await cloudSelect('user_profiles?select=id&limit=1').catch(()=>[]); const role=(!all||!all.length)?'admin':'user'; await cloudRequest('user_profiles',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({id:authState.user.id,display_name:(authState.user.email||'').split('@')[0],role})}); rows=await cloudSelect(`user_profiles?select=*&id=eq.${encodeURIComponent(authState.user.id)}&limit=1`); } authState.profile=rows&&rows[0]; await loadProfiles(); }catch(e){ console.warn('profile load failed',e); authState.profile={id:authState.user.id,display_name:(authState.user.email||'사용자'),role:'user'}; } }
+async function loadProfiles(){ authState.profiles=await cloudSelect('user_profiles?select=*&order=created_at.asc').catch(()=>[]); }
+async function updateProfileRole(id,role){ await cloudRequest(`user_profiles?id=eq.${encodeURIComponent(id)}`,{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({role})}); await loadProfiles(); renderUsers(); }
+function showAuth(){ const o=$('authOverlay'); if(o) o.classList.add('show'); }
+function hideAuth(){ const o=$('authOverlay'); if(o) o.classList.remove('show'); }
+function currentRole(){ return authState.profile?.role || 'viewer'; }
+function applyRoleAccess(){ const role=currentRole(); const name=authState.profile?.display_name || authState.user?.email || '사용자'; const cur=$('currentUser'); if(cur) cur.textContent=`👤 ${name} (${roleName(role)})`; document.querySelectorAll('[data-admin-only]').forEach(el=>el.style.display=role==='admin'?'flex':'none'); if(role==='viewer' && $('register')?.classList.contains('show')) showPage('dashboard'); if(role!=='admin' && ['employees','settings','users'].some(id=>$(id)?.classList.contains('show'))) showPage('dashboard'); }
 
 const save = () => localStorage.setItem(KEY, JSON.stringify(state));
 const cloudHeaders = (extra={}) => ({
   apikey: SUPABASE_KEY,
-  Authorization: `Bearer ${SUPABASE_KEY}`,
+  Authorization: `Bearer ${(authState.session&&authState.session.access_token)||SUPABASE_KEY}`,
   'Content-Type': 'application/json',
   ...extra
 });
@@ -62,7 +82,7 @@ async function loadCloudData(){
     save();
   }catch(err){
     console.warn('Supabase 동기화 실패, 로컬 데이터로 실행합니다.', err);
-    alert('Supabase 연결을 확인해주세요. 테이블/RLS 설정이 안 되어 있으면 동기화가 안 됩니다.');
+    console.warn('Supabase 연결 실패: 테이블/RLS/Auth 설정을 확인해주세요.');
   }
 }
 async function insertEmployeeCloud(obj){
@@ -176,7 +196,7 @@ function employeeMonthSettlement(emp){
 function monthlyGrandTotal(){ return state.employees.filter(e=>e.active).reduce((s,e)=>s+employeeMonthSettlement(e).total,0); }
 function recordTotal(r){ return r.participants.reduce((sum,id)=>{const emp=state.employees.find(e=>String(e.id)===String(id)); return sum+(emp?calcPay(r,emp):0)},0); }
 function monthRecords(){ const m=$('globalMonth').value; return state.records.filter(r=>r.date.startsWith(m)).sort((a,b)=>a.date.localeCompare(b.date)); }
-function renderAll(){ renderTypes(); renderParticipants(); renderDashboard(); renderStatement(); renderCalendar(); renderEmployeeList(); renderEmployeeSummary(); renderSiteSummary(); renderSettings(); updateCalc(); }
+function renderAll(){ renderTypes(); renderParticipants(); renderDashboard(); renderStatement(); renderCalendar(); renderEmployeeList(); renderEmployeeSummary(); renderSiteSummary(); renderSettings(); renderUsers(); updateCalc(); applyRoleAccess(); }
 function renderTypes(){ const box=$('typeChips'); box.innerHTML=''; state.settings.workTypes.forEach(t=>{const b=document.createElement('button');b.type='button';b.className='chip '+(t===selectedType?'active':'');b.textContent=t;b.onclick=()=>{selectedType=t;renderTypes()};box.appendChild(b)}); }
 function renderParticipants(){ const box=$('participantBox'); box.innerHTML=''; state.employees.filter(e=>e.active).forEach(e=>{const label=document.createElement('label');label.className='person';label.innerHTML=`<input type="checkbox" value="${e.id}" class="part"> <span>${e.name} <small>${e.payType==='half'?'평일절반':''}</small></span>`;box.appendChild(label)}); document.querySelectorAll('.part').forEach(c=>c.onchange=updateCalc); }
 function currentFormRecord(){
@@ -189,7 +209,7 @@ function updateCalc(){ setFullDayTimes(); const r=currentFormRecord(); const box
 ['date','startTime','endTime'].forEach(id=>$(id).addEventListener('change',()=>{ if(id!=='date') normalizeTimeInput(id); updateFullDayVisibility(); autoTypeByDateTime(); updateCalc(); }));
 ['startTime','endTime'].forEach(id=>$(id).addEventListener('blur',()=>{ normalizeTimeInput(id); autoTypeByDateTime(); updateCalc(); }));
 if($('fullDayWork')) $('fullDayWork').addEventListener('change',()=>{ setFullDayTimes(); autoTypeByDateTime(); updateCalc(); });
-$('overtimeForm').onsubmit=async e=>{e.preventDefault(); setFullDayTimes(); normalizeTimeInput('startTime'); normalizeTimeInput('endTime'); const r=currentFormRecord(); if(!parseTimeInput(r.startTime)||!parseTimeInput(r.endTime)){alert('시간 형식을 확인해주세요. 예: 18:00 또는 1800');return} if(!r.participants.length){alert('참석자를 선택해주세요.');return} try{ const edit=$('editId').value; if(edit){ const row=await updateRecordCloud(edit,r); const i=state.records.findIndex(x=>String(x.id)===String(edit)); state.records[i]=recFromDb(row); } else { const row=await insertRecordCloud(r); state.records.push(recFromDb(row)); } save(); clearForm(); renderAll(); loadCloudData().then(()=>{clearForm(); renderAll();}); alert('저장되었습니다.'); }catch(err){ console.error(err); alert('DB 저장 실패: Supabase 테이블/RLS 설정을 확인해주세요.'); } };
+$('overtimeForm').onsubmit=async e=>{e.preventDefault(); setFullDayTimes(); normalizeTimeInput('startTime'); normalizeTimeInput('endTime'); const r=currentFormRecord(); if(!parseTimeInput(r.startTime)||!parseTimeInput(r.endTime)){alert('시간 형식을 확인해주세요. 예: 18:00 또는 1800');return} if(!r.participants.length){alert('참석자를 선택해주세요.');return} try{ const edit=$('editId').value; if(edit){ const row=await updateRecordCloud(edit,r); const i=state.records.findIndex(x=>String(x.id)===String(edit)); state.records[i]=recFromDb(row); } else { const row=await insertRecordCloud(r); state.records.push(recFromDb(row)); } save(); showAuth(); getCurrentUser().then(async user=>{ if(user){ await loadCloudData(); clearForm(); renderAll(); applyRoleAccess(); } else { clearForm(); renderAll(); } }); alert('저장되었습니다.'); }catch(err){ console.error(err); alert('DB 저장 실패: Supabase 테이블/RLS 설정을 확인해주세요.'); } };
 function clearForm(){ $('overtimeForm').reset(); $('date').value=new Date().toISOString().slice(0,10); $('startTime').value='18:00'; $('endTime').value='22:00'; if($('fullDayWork')) $('fullDayWork').checked=false; $('editId').value=''; document.querySelectorAll('.part').forEach(c=>c.checked=false); updateFullDayVisibility(); autoTypeByDateTime(); updateCalc(); }
 $('clearForm').onclick=clearForm; $('selectAllEmployees').onclick=()=>{const all=[...document.querySelectorAll('.part')]; const any=all.some(c=>!c.checked); all.forEach(c=>c.checked=any); updateCalc();};
 function renderDashboard(){ const rec=monthRecords(); const total=monthlyGrandTotal(); const people=new Set(rec.flatMap(r=>r.participants)); $('dashTotal').textContent=KRW(total); $('dashCount').textContent=rec.length+'건'; $('dashPeople').textContent=people.size+'명'; if($('dashHoliday')) $('dashHoliday').textContent=rec.filter(r=>r.type==='휴일근무').length+'건'; $('recentList').innerHTML=rec.slice(-6).reverse().map(r=>`<div class="recentRow"><span>${r.date.slice(5)} (${['일','월','화','수','목','금','토'][new Date(r.date+'T00:00').getDay()]})</span><span class="badge ${r.type}">${r.type}</span><span>${r.site}</span><span>${r.workName||''}</span><strong class="money">${KRW(recordTotal(r))}</strong></div>`).join('')||'<p class="muted">등록된 내역이 없습니다.</p>'; }
@@ -209,20 +229,34 @@ function renderStatement(){
   $('statementTable').innerHTML=html;
 }
 window.editRecord=id=>{ const r=state.records.find(x=>String(x.id)===String(id)); showPage('register'); $('editId').value=r.id; $('date').value=r.date; $('site').value=r.site; $('workName').value=r.workName; $('startTime').value=r.startTime; $('endTime').value=r.endTime; $('note').value=r.note; if($('fullDayWork')) $('fullDayWork').checked=!!r.fullDay; updateFullDayVisibility(); selectedType=r.type; renderTypes(); document.querySelectorAll('.part').forEach(c=>c.checked=r.participants.map(String).includes(String(c.value))); updateCalc(); };
-window.deleteRecord=id=>{ if(confirm('삭제할까요?')){state.records=state.records.filter(r=>r.id!==id); save(); renderAll();} };
+window.deleteRecord=async id=>{ if(currentRole()!=='admin'){alert('삭제는 관리자만 가능합니다.');return} if(confirm('삭제할까요?')){try{await deleteRecordCloud(id)}catch(e){console.warn(e)} state.records=state.records.filter(r=>String(r.id)!==String(id)); save(); renderAll();} };
 function buildCalendarHtml(){ const m=$('globalMonth').value; const [y,mo]=m.split('-').map(Number); const first=new Date(y,mo-1,1); const last=new Date(y,mo,0).getDate(); const names=['일','월','화','수','목','금','토']; let html=names.map((n,i)=>`<div class="dayName ${i===0?'sun':i===6?'sat':''}">${n}</div>`).join(''); for(let i=0;i<first.getDay();i++) html+='<div class="day empty"></div>'; for(let d=1;d<=last;d++){ const ds=`${m}-${String(d).padStart(2,'0')}`; const wd=new Date(ds+'T00:00').getDay(); const holiday=state.settings.holidays.includes(ds); const classes=['day']; if(wd===0) classes.push('sun'); if(wd===6) classes.push('sat'); if(holiday) classes.push('holiday'); const rec=state.records.filter(r=>r.date===ds); html+=`<div class="${classes.join(' ')}"><div class="num">${d}</div>${holiday?'<small class="holidayLabel">공휴일</small>':''}${rec.map(r=>`<span class="eventPill ${r.type}">${r.type} ${rec.length>1?'':KRW(recordTotal(r))}</span>`).join('')}</div>`; } return html; }
 function renderCalendar(){ const m=$('globalMonth').value; const [y,mo]=m.split('-').map(Number); if($('calendarTitle')) $('calendarTitle').textContent=`${y}년 ${mo}월 특근캘린더`; if($('miniCalendarTitle')) $('miniCalendarTitle').textContent=`${y}년 ${mo}월`; const html=buildCalendarHtml(); if($('calendarGrid')) $('calendarGrid').innerHTML=html; if($('calendarGridFull')) $('calendarGridFull').innerHTML=html; }
 function renderEmployeeList(){ $('employeeList').innerHTML=state.employees.map(e=>`<div class="listItem"><div><strong>${e.name}</strong> <span class="badge">${e.payType==='half'?'평일절반':'일반'}</span><br><small>${e.position||''}</small></div><div class="itemBtns"><button class="ghost small" onclick="editEmployee('${e.id}')">수정</button><button class="ghost small danger" onclick="removeEmployee('${e.id}')">삭제</button></div></div>`).join(''); }
-$('employeeForm').onsubmit=async e=>{e.preventDefault(); const edit=$('empEditId').value; const obj={name:$('empName').value,position:$('empPosition').value,payType:$('empPayType').value,active:true}; try{ if(edit){const row=await updateEmployeeCloud(edit,obj); Object.assign(state.employees.find(x=>String(x.id)===String(edit)), empFromDb(row));} else {const row=await insertEmployeeCloud(obj); state.employees.push(empFromDb(row));} save(); $('employeeForm').reset(); $('empEditId').value=''; renderAll(); }catch(err){ console.error(err); alert('직원 저장 실패: Supabase 연결/RLS 설정을 확인해주세요.'); } };
+$('employeeForm').onsubmit=async e=>{e.preventDefault(); if(currentRole()!=='admin'){alert('직원관리는 관리자만 가능합니다.');return} const edit=$('empEditId').value; const obj={name:$('empName').value,position:$('empPosition').value,payType:$('empPayType').value,active:true}; try{ if(edit){const row=await updateEmployeeCloud(edit,obj); Object.assign(state.employees.find(x=>String(x.id)===String(edit)), empFromDb(row));} else {const row=await insertEmployeeCloud(obj); state.employees.push(empFromDb(row));} save(); $('employeeForm').reset(); $('empEditId').value=''; renderAll(); }catch(err){ console.error(err); alert('직원 저장 실패: Supabase 연결/RLS 설정을 확인해주세요.'); } };
 window.editEmployee=id=>{const e=state.employees.find(x=>String(x.id)===String(id)); $('empEditId').value=e.id; $('empName').value=e.name; $('empPosition').value=e.position; $('empPayType').value=e.payType;};
-window.removeEmployee=async id=>{if(confirm('직원을 삭제할까요? 기존 기록의 참석 표시는 유지되지 않을 수 있습니다.')){try{await deleteEmployeeCloud(id); state.employees=state.employees.filter(e=>String(e.id)!==String(id)); save(); renderAll();}catch(err){console.error(err); alert('직원 삭제 실패: Supabase 연결/RLS 설정을 확인해주세요.');}}};
+window.removeEmployee=async id=>{if(currentRole()!=='admin'){alert('직원관리는 관리자만 가능합니다.');return} if(confirm('직원을 삭제할까요? 기존 기록의 참석 표시는 유지되지 않을 수 있습니다.')){try{await deleteEmployeeCloud(id); state.employees=state.employees.filter(e=>String(e.id)!==String(id)); save(); renderAll();}catch(err){console.error(err); alert('직원 삭제 실패: Supabase 연결/RLS 설정을 확인해주세요.');}}};
 $('empClear').onclick=()=>{$('employeeForm').reset();$('empEditId').value=''};
 function renderEmployeeSummary(){ const sel=$('employeeFilter'); const old=sel.value; sel.innerHTML=state.employees.map(e=>`<option value="${e.id}">${e.name}</option>`).join(''); if(old)sel.value=old; const emp=state.employees.find(e=>e.id==sel.value)||state.employees[0]; if(!emp){ $('employeeDetail').innerHTML='<p class="muted">등록된 직원이 없습니다.</p>'; return; } const rec=monthRecords().filter(r=>r.participants.includes(emp.id)); $('employeeDetail').innerHTML=`<h3>${emp.name}</h3>`+rec.map(r=>`<div class="listItem"><span>${r.date.slice(5)} ${r.type} ${r.site}</span><strong>${KRW(calcPay(r,emp))}</strong></div>`).join('')+`<div class="listItem"><span>분단위 이월정산</span><small>${employeeMonthSettlement(emp).carryText}</small></div><div class="listItem"><strong>합계</strong><strong>${KRW(employeeMonthSettlement(emp).total)}</strong></div>`; }
 $('employeeFilter').onchange=renderEmployeeSummary;
+
+function renderUsers(){
+  const box=$('userList'); if(!box) return;
+  if(currentRole()!=='admin'){ box.innerHTML='<p class="muted">관리자만 확인 가능합니다.</p>'; return; }
+  if(!authState.profiles || !authState.profiles.length){ box.innerHTML='<p class="muted">등록된 사용자가 없습니다.</p>'; return; }
+  box.innerHTML=authState.profiles.map(u=>`<div class="listItem"><div><strong>${u.display_name||u.id}</strong><br><small>${u.id}</small></div><select class="roleSelect" data-id="${u.id}"><option value="admin" ${u.role==='admin'?'selected':''}>관리자</option><option value="user" ${u.role==='user'?'selected':''}>일반사용자</option><option value="viewer" ${u.role==='viewer'?'selected':''}>조회전용</option></select></div>`).join('');
+  document.querySelectorAll('.roleSelect').forEach(sel=>sel.onchange=async()=>{ if(confirm('권한을 변경할까요?')) await updateProfileRole(sel.dataset.id, sel.value); });
+}
+const loginForm=$('loginForm');
+if(loginForm) loginForm.onsubmit=async e=>{e.preventDefault(); const msg=$('authMsg'); msg.textContent='로그인 중...'; try{ await login($('loginEmail').value,$('loginPassword').value); msg.textContent=''; }catch(err){ msg.textContent='로그인 실패: '+err.message; }};
+if($('logoutBtn')) $('logoutBtn').onclick=()=>{ if(confirm('로그아웃할까요?')) signOut(); };
+const userCreateForm=$('userCreateForm');
+if(userCreateForm) userCreateForm.onsubmit=async e=>{ e.preventDefault(); if(currentRole()!=='admin'){alert('관리자만 가능합니다.');return} try{ await signUpByAdmin($('newUserId').value,$('newUserPassword').value,$('newUserName').value,$('newUserRole').value); $('userCreateForm').reset(); await loadProfiles(); renderUsers(); alert('계정을 생성했습니다.'); }catch(err){ alert('계정 생성 실패: '+err.message); } };
+
 function renderSiteSummary(){ const map={}; monthRecords().forEach(r=>{map[r.site]=map[r.site]||{count:0,total:0,types:{}};map[r.site].count++;map[r.site].total+=recordTotal(r);map[r.site].types[r.type]=(map[r.site].types[r.type]||0)+1}); $('siteSummaryList').innerHTML=Object.entries(map).map(([site,v])=>`<div class="listItem"><div><strong>${site}</strong><br><small>${Object.entries(v.types).map(([k,c])=>`${k} ${c}건`).join(' · ')}</small></div><strong>${KRW(v.total)}</strong></div>`).join('')||'집계 내역이 없습니다.'; }
 function renderSettings(){ $('normalRate').value=state.settings.normalRate; $('halfRate').value=state.settings.halfRate; $('holidayFixed').value=state.settings.holidayFixed; $('minuteCarry').checked=state.settings.minuteCarry!==false; $('holidays').value=state.settings.holidays.join('\n'); if($('holidayAuto')) $('holidayAuto').checked=state.settings.holidayAuto!==false; $('workTypes').value=state.settings.workTypes.join(','); }
-$('settingsForm').onsubmit=async e=>{e.preventDefault(); state.settings.normalRate=Number($('normalRate').value); state.settings.halfRate=Number($('halfRate').value); state.settings.holidayFixed=Number($('holidayFixed').value); state.settings.minuteCarry=$('minuteCarry').checked; state.settings.holidays=$('holidays').value.split(/\s+/).filter(Boolean); state.settings.workTypes=$('workTypes').value.split(',').map(x=>x.trim()).filter(Boolean).filter(x=>['야간특근','휴일근무'].includes(x)); if(!state.settings.workTypes.length) state.settings.workTypes=['야간특근','휴일근무']; autoTypeByDateTime(); try{await saveSettingsCloud();}catch(err){console.warn(err); alert('설정은 로컬 저장되었습니다. Supabase 설정 저장은 실패했습니다.');} save(); renderAll(); alert('설정 저장되었습니다.');};
-function showPage(id){ document.querySelectorAll('.page').forEach(p=>p.classList.remove('show')); $(id).classList.add('show'); document.querySelectorAll('.nav').forEach(n=>n.classList.toggle('active',n.dataset.page===id)); window.scrollTo({top:0,behavior:'smooth'}); }
+$('settingsForm').onsubmit=async e=>{e.preventDefault(); if(currentRole()!=='admin'){alert('설정은 관리자만 가능합니다.');return} state.settings.normalRate=Number($('normalRate').value); state.settings.halfRate=Number($('halfRate').value); state.settings.holidayFixed=Number($('holidayFixed').value); state.settings.minuteCarry=$('minuteCarry').checked; state.settings.holidays=$('holidays').value.split(/\s+/).filter(Boolean); state.settings.workTypes=$('workTypes').value.split(',').map(x=>x.trim()).filter(Boolean).filter(x=>['야간특근','휴일근무'].includes(x)); if(!state.settings.workTypes.length) state.settings.workTypes=['야간특근','휴일근무']; autoTypeByDateTime(); try{await saveSettingsCloud();}catch(err){console.warn(err); alert('설정은 로컬 저장되었습니다. Supabase 설정 저장은 실패했습니다.');} save(); renderAll(); alert('설정 저장되었습니다.');};
+function showPage(id){ const role=currentRole(); if(role!=='admin' && ['employees','settings','users'].includes(id)){alert('관리자만 접근 가능합니다.'); id='dashboard';} if(role==='viewer' && id==='register'){alert('조회전용 계정은 등록할 수 없습니다.'); id='dashboard';} document.querySelectorAll('.page').forEach(p=>p.classList.remove('show')); $(id).classList.add('show'); document.querySelectorAll('.nav').forEach(n=>n.classList.toggle('active',n.dataset.page===id)); window.scrollTo({top:0,behavior:'smooth'}); }
 document.querySelectorAll('.nav').forEach(b=>b.onclick=()=>showPage(b.dataset.page)); document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>showPage(b.dataset.go)); $('globalMonth').onchange=renderAll; $('printStatement').onclick=()=>window.print();
 function setMonthOffset(offset){
   const input=$('globalMonth');
@@ -267,7 +301,7 @@ function exportExcelStatement(){
 $('exportCsv').onclick=exportExcelStatement;
 
 $('resetDemo').onclick=()=>{if(confirm('이 기기의 임시 저장값만 초기화하고 Supabase 데이터를 다시 불러올까요?')){localStorage.removeItem(KEY);location.reload();}};
-clearForm(); renderAll(); loadCloudData().then(()=>{clearForm(); renderAll();});
+showAuth(); getCurrentUser().then(async user=>{ if(user){ await loadCloudData(); clearForm(); renderAll(); applyRoleAccess(); } else { clearForm(); renderAll(); } });
 
 // v1.11 mobile drawer behavior
 (function(){

@@ -178,3 +178,27 @@
 #statementTable .noteRow td{font-weight:600;color:#334155}
 
 .userActions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.deleteUserBtn{padding:8px 10px}
+
+
+/* Mobile header fix */
+@media (max-width:768px){
+.header-actions .settings-btn,
+.header-actions button.settings,
+#settingsBtn{
+ display:none !important;
+}
+.header{
+ flex-wrap:nowrap !important;
+}
+.logo-area img,
+.sidebar-logo img{
+ max-height:40px !important;
+}
+.logo-area .title,
+.app-title{
+ font-size:18px !important;
+ white-space:nowrap !important;
+ overflow:hidden;
+ text-overflow:ellipsis;
+}
+}

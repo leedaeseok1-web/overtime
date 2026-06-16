@@ -138,3 +138,36 @@
   .rateBox b{font-size:12px;}
   .rateBtn{margin-top:10px;padding:10px;}
 }
+
+
+/* v1.17 statement/readability fixes */
+.rateBox[data-admin-only][style*="none"]{display:none!important;}
+#statementTable .empCol{min-width:82px!important;width:82px!important;max-width:90px!important;vertical-align:middle;}
+#statementTable .markCircle{font-size:28px;font-weight:900;line-height:1;display:inline-block;color:#0b1f38;}
+#statementTable .carryCell small{display:block;white-space:pre-line;line-height:1.25;font-size:11px;word-break:keep-all;}
+#statementTable tfoot th{vertical-align:middle;}
+.miniTable{border-collapse:collapse;width:100%;background:#fff;font-size:13px;}
+.miniTable th,.miniTable td{border:1px solid #161616;padding:10px;text-align:center;white-space:nowrap;}
+.miniTable th{background:#f0f3f9;}
+.miniTable .nameCell{text-align:left;}
+.miniTable .holidayDate{background:#fde9e7!important;color:#d60000!important;font-weight:800;}
+.employeeSummaryTableWrap{overflow:auto;}
+.employeeSummaryTable .carryCell small{display:block;white-space:pre-line;line-height:1.25;}
+
+@media(max-width:760px){
+  /* 월별명세서는 모바일에서도 PC와 동일한 표 형태로 유지 */
+  #statement .tableWrap{overflow:auto!important;-webkit-overflow-scrolling:touch;}
+  #statementTable{display:table!important;border-collapse:collapse!important;width:max-content!important;min-width:100%!important;background:#fff!important;font-size:12px!important;}
+  #statementTable thead{display:table-header-group!important;}
+  #statementTable tbody{display:table-row-group!important;}
+  #statementTable tfoot{display:table-footer-group!important;}
+  #statementTable tr{display:table-row!important;background:transparent!important;border:0!important;border-radius:0!important;margin:0!important;padding:0!important;box-shadow:none!important;}
+  #statementTable th,#statementTable td{display:table-cell!important;border:1px solid #161616!important;padding:7px 5px!important;text-align:center!important;white-space:nowrap!important;}
+  #statementTable .empCol{display:table-cell!important;min-width:74px!important;width:74px!important;max-width:80px!important;}
+  #statementTable .manageCol{display:table-cell!important;min-width:92px!important;width:92px!important;}
+  #statementTable .markCircle{font-size:26px!important;}
+  #statementTable .carryCell small{font-size:10px!important;white-space:pre-line!important;line-height:1.2!important;}
+  .employeeSummaryTableWrap{overflow:auto!important;-webkit-overflow-scrolling:touch;}
+  .employeeSummaryTable{width:max-content;min-width:100%;font-size:12px;}
+  .employeeSummaryTable th,.employeeSummaryTable td{padding:8px 6px;}
+}

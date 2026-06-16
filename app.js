@@ -207,8 +207,12 @@ function employeeMonthSettlement(emp){
     Object.entries(p.remainders).forEach(([rate,min])=>remainders[rate]=(remainders[rate]||0)+min);
   });
   let carryPay=0, carryText=[];
-  Object.entries(remainders).forEach(([rate,min])=>{ const h=Math.floor(min/60); const rem=min%60; if(h) carryPay+=h*Number(rate); if(min) carryText.push(`${h}시간 지급 / 잔여 ${rem}분`); });
-  return {base, carryPay, total:base+carryPay, carryText:carryText.join(' · ')||'잔여분 없음'};
+  Object.entries(remainders).forEach(([rate,min])=>{
+    const h=Math.floor(min/60); const rem=min%60;
+    if(h) carryPay+=h*Number(rate);
+    if(min) carryText.push(`지급 ${h}시간\n잔여 ${rem}분`);
+  });
+  return {base, carryPay, total:base+carryPay, carryText:carryText.join('\n')||'잔여분 없음'};
 }
 function monthlyGrandTotal(){ return state.employees.filter(e=>e.active).reduce((s,e)=>s+employeeMonthSettlement(e).total,0); }
 function recordTotal(r){ return r.participants.reduce((sum,id)=>{const emp=state.employees.find(e=>String(e.id)===String(id)); return sum+(emp?calcPay(r,emp):0)},0); }
@@ -239,12 +243,12 @@ function renderStatement(){
   rec.forEach(r=>{
     const dayClass=isHoliday(r.date)?'holidayDate':'';
     html+=`<tr><td class="dateCol ${dayClass}">${r.date.slice(5)}</td><td class="typeCol">${r.type}</td><td class="siteCol">${r.site}</td><td class="workCol nameCell">${r.workName||''}</td><td class="timeCol">${r.startTime}~${r.endTime}</td><td class="amountCol">${KRW(recordTotal(r))}</td>`+
-      emps.map(e=>`<td class="empCol">${r.participants.includes(e.id)?'○':''}</td>`).join('')+
+      emps.map(e=>`<td class="empCol">${r.participants.includes(e.id)?'<span class="markCircle">○</span>':''}</td>`).join('')+
       (isAdmin()?`<td class="manageCol"><button class="ghost small" onclick="editRecord('${r.id}')">수정</button> <button class="ghost small danger" onclick="deleteRecord('${r.id}')">삭제</button></td>`:'')+`</tr>`;
   });
   const manageFoot = isAdmin() ? '<th></th>' : '';
   html+='</tbody><tfoot><tr><th colspan="6">직원별 합계</th>'+emps.map(e=>`<th class="empCol">${KRW(employeeMonthSettlement(e).total)}</th>`).join('')+manageFoot+'</tr>'+
-    (state.settings.minuteCarry?'<tr><th colspan="6">분단위 이월정산</th>'+emps.map(e=>`<th class="empCol"><small>${employeeMonthSettlement(e).carryText}</small></th>`).join('')+manageFoot+'</tr>':'')+'</tfoot>';
+    (state.settings.minuteCarry?'<tr><th colspan="6">분단위 이월정산</th>'+emps.map(e=>`<th class="empCol carryCell"><small>${employeeMonthSettlement(e).carryText}</small></th>`).join('')+manageFoot+'</tr>':'')+'</tfoot>';
   $('statementTable').innerHTML=html;
 }
 window.editRecord=id=>{ if(!isAdmin()){alert('수정은 관리자만 가능합니다.');return} const r=state.records.find(x=>String(x.id)===String(id)); showPage('register'); $('editId').value=r.id; $('date').value=r.date; $('site').value=r.site; $('workName').value=r.workName; $('startTime').value=r.startTime; $('endTime').value=r.endTime; $('note').value=r.note; if($('fullDayWork')) $('fullDayWork').checked=!!r.fullDay; updateFullDayVisibility(); selectedType=r.type; renderTypes(); document.querySelectorAll('.part').forEach(c=>c.checked=r.participants.map(String).includes(String(c.value))); updateCalc(); };
@@ -256,7 +260,24 @@ $('employeeForm').onsubmit=async e=>{e.preventDefault(); if(currentRole()!=='adm
 window.editEmployee=id=>{const e=state.employees.find(x=>String(x.id)===String(id)); $('empEditId').value=e.id; $('empName').value=e.name; $('empPosition').value=e.position; $('empPayType').value=e.payType;};
 window.removeEmployee=async id=>{if(currentRole()!=='admin'){alert('직원관리는 관리자만 가능합니다.');return} if(confirm('직원을 삭제할까요? 기존 기록의 참석 표시는 유지되지 않을 수 있습니다.')){try{await deleteEmployeeCloud(id); state.employees=state.employees.filter(e=>String(e.id)!==String(id)); save(); renderAll();}catch(err){console.error(err); alert('직원 삭제 실패: Supabase 연결/RLS 설정을 확인해주세요.');}}};
 $('empClear').onclick=()=>{$('employeeForm').reset();$('empEditId').value=''};
-function renderEmployeeSummary(){ const sel=$('employeeFilter'); const old=sel.value; sel.innerHTML=state.employees.map(e=>`<option value="${e.id}">${e.name}</option>`).join(''); if(old)sel.value=old; const emp=state.employees.find(e=>e.id==sel.value)||state.employees[0]; if(!emp){ $('employeeDetail').innerHTML='<p class="muted">등록된 직원이 없습니다.</p>'; return; } const rec=monthRecords().filter(r=>r.participants.includes(emp.id)); $('employeeDetail').innerHTML=`<h3>${emp.name}</h3>`+rec.map(r=>`<div class="listItem"><span>${r.date.slice(5)} ${r.type} ${r.site}</span><strong>${KRW(calcPay(r,emp))}</strong></div>`).join('')+`<div class="listItem"><span>분단위 이월정산</span><small>${employeeMonthSettlement(emp).carryText}</small></div><div class="listItem"><strong>합계</strong><strong>${KRW(employeeMonthSettlement(emp).total)}</strong></div>`; }
+function renderEmployeeSummary(){
+  const sel=$('employeeFilter');
+  const old=sel.value;
+  sel.innerHTML=state.employees.map(e=>`<option value="${e.id}">${e.name}</option>`).join('');
+  if(old) sel.value=old;
+  const emp=state.employees.find(e=>String(e.id)===String(sel.value))||state.employees[0];
+  if(!emp){ $('employeeDetail').innerHTML='<p class="muted">등록된 직원이 없습니다.</p>'; return; }
+  const rec=monthRecords().filter(r=>r.participants.map(String).includes(String(emp.id)));
+  let html=`<h3>${emp.name}</h3><div class="tableWrap employeeSummaryTableWrap"><table class="miniTable employeeSummaryTable"><thead><tr><th>날짜</th><th>구분</th><th>현장명</th><th>작업내용</th><th>시간</th><th>금액</th></tr></thead><tbody>`;
+  if(rec.length){
+    html += rec.map(r=>`<tr><td class="${isHoliday(r.date)?'holidayDate':''}">${r.date.slice(5)}</td><td>${r.type}</td><td>${r.site||''}</td><td class="nameCell">${r.workName||''}</td><td>${r.startTime}~${r.endTime}</td><td class="money">${KRW(calcPay(r,emp))}</td></tr>`).join('');
+  }else{
+    html += '<tr><td colspan="6" class="muted">해당 월 내역이 없습니다.</td></tr>';
+  }
+  const settle=employeeMonthSettlement(emp);
+  html += `</tbody><tfoot><tr><th colspan="5">분단위 이월정산</th><th class="carryCell"><small>${settle.carryText}</small></th></tr><tr><th colspan="5">합계</th><th>${KRW(settle.total)}</th></tr></tfoot></table></div>`;
+  $('employeeDetail').innerHTML=html;
+}
 $('employeeFilter').onchange=renderEmployeeSummary;
 
 function renderUsers(){
